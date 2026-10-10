@@ -17,6 +17,7 @@ $$S = \bigcup_{k=0}^{N} \{0, 1, \dots, N-1\}^k$$
 
 Ví dụ với N = 4: $s = (1, 3)$ nghĩa là đã đặt hậu tại ô (hàng 1, cột 0) và (hàng 3, cột 1).
 
+
 ## 2. Trạng thái đầu
 
 $$s_0 = () \quad \text{(bàn cờ trống, chưa đặt quân nào)}$$
