@@ -1,0 +1,34 @@
+Pacman và Ghost:
+Sơ bộ: sử dụng Minimax tỉa nhánh alpha/beta cho Ghost
+Ghost lựa chọn Max, Pacman lựa chọn Min
+
+
+Tiêu chí đánh giá: ở một node s độ sâu d
+1. DistBFS​
+Khoảng cách thực tế (số ô) giữa Pacman và Ghost. Tiêu chí: càng xa càng an toàn
+-> Sử dụng BFS để có tốc độ xử lý nhanh nhất
+-> Không sử dụng Mahattan vì sẽ bỏ qua tường
+
+2. Mobility
+Vị trí đẹp. Tiêu chí: Có nhiều ngã rẽ (ngã 3 ngã tư) sẽ tốt hơn ngõ cụt
+-> Trừ điểm nặng khi đường dẫn đến ngõ cụt
+-> Cộng điểm khi số lượng node có nhiều ngã rẽ
+
+3. InDeadEnd
+Trạng thái kết thúc:
+Nếu trạng thái dẫn đến Mahattan giữa Pacman và Ghost <= 1 -> Đánh điểm -infinity
+Nếu trạng thái dẫn đến chiến thắng cho Ghost -> Đánh điểm +infinity
+Gợi ý return 0 hoặc 1: có hoặc không có ngõ cụt
+
+Công thức tính điểm cuối cùng:
+Evaluation(s)= w1​ * DistBFS​(Ghost,Pacman) + w2​ * Mobility(Ghost) − w3​ * InDeadEnd(Ghost)
+Với:
+w1, w2, w3 là trọng số thể hiện sức nặng của tiêu chí tương ứng.
+Ex: w3 = 50 nghĩa là đường cụt bị phạt rất nặng
+    w1 và w2 có thể cân đối
+
+Note:
+Tuỳ vào khoảng cách hiện tại với Pacman mà linh hoạt đổi chọn thuật toán:
+Ví dụ:
+BFS với Pacman trên 15 ô, thì chọn ô dẫn đến tăng BFS với Pacman sau đó là được
+Nếu khoảng cách < 15 ô, bật thuật toán Minimax
