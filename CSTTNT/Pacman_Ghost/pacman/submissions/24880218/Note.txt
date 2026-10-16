@@ -27,8 +27,19 @@ w1, w2, w3 là trọng số thể hiện sức nặng của tiêu chí tương �
 Ex: w3 = 50 nghĩa là đường cụt bị phạt rất nặng
     w1 và w2 có thể cân đối
 
+
+python arena.py --seek example_student --hide 24880218 
+
 Note:
 Tuỳ vào khoảng cách hiện tại với Pacman mà linh hoạt đổi chọn thuật toán:
 Ví dụ:
 BFS với Pacman trên 15 ô, thì chọn ô dẫn đến tăng BFS với Pacman sau đó là được
 Nếu khoảng cách < 15 ô, bật thuật toán Minimax
+
+
+Đánh giá hiện tại
+Ghost theo BFS -> Cứ tăng distance là điểm
+Nhược: 
+Khó thắng nếu đi trên đường thẳng vì đua tốc độ không bằng Pacman
+Cải thiện:
+1. Chọn các ngã rẽ thay vì đi thẳng ?
