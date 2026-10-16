@@ -20,8 +20,11 @@ IMPORTANT:
 - map_state cells: 1=wall, 0=empty, -1=unseen (fog)
 """
 
+import random
 import sys
 from pathlib import Path
+
+from sklearn import neighbors
 
 # Add src to path to import the interface
 src_path = Path(__file__).parent.parent.parent / "src"
@@ -162,7 +165,6 @@ class GhostAgent(BaseGhostAgent):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # TODO: Initialize any data structures you need
-        self.previous_move = Move.STAY
     
     def step(self, map_state: np.ndarray,   # [] 2 chiều, chứa các giá trị 0, 1. O là ok, 1 là tường
              my_position: tuple,            # (row, col)
@@ -181,7 +183,28 @@ class GhostAgent(BaseGhostAgent):
             Move: One of Move.UP, Move.DOWN, Move.LEFT, Move.RIGHT, Move.STAY
         """
         # TODO: Implement your search algorithm here
-        return self._move_decision_bfs(map_state, my_position, enemy_position)
+        # Vẽ map của pacman
+        pacman_time_map = self._pacman_move_time(map_state, enemy_position)
+        current_pacman_time = pacman_time_map.get(my_position, float('inf'))
+
+        # Tìm pacman time tốt nhất quanh vị trí hiện tại
+        neighbors = self._get_neighbors(my_position, map_state)
+        best_time = max(pacman_time_map.get(pos, float('inf')) for pos, _ in neighbors)
+        if best_time < current_pacman_time:  # đang ở vị trí tốt: đứng yên thường là tối ưu
+            return Move.STAY
+        # Chọn move tăng pacman time
+        best_moves = [(pos, move) for pos, move in neighbors 
+                      if pacman_time_map.get(pos, float('inf')) == best_time]
+        # Kiểm tra ngõ cụt
+        best_moves_copy = best_moves.copy()
+        for pos, move in best_moves_copy:
+            # Xoá nếu vị trí dẫn đến ngõ cụt
+            if self._is_dead_end(pos, move, map_state):
+                best_moves.remove((pos, move))
+
+        if len(best_moves) == 0:
+            return Move.STAY
+        return random.choice([move for _, move in best_moves])
 
     
     # Helper methods (you can add more)
@@ -222,94 +245,43 @@ class GhostAgent(BaseGhostAgent):
         return neighbors
 
 
-    def _distance_bfs(self, map_state: np.ndarray, start, end):
-        """
-        Trả về khoảng cách tử start đến end position
-        """
-        if start == end:
-            return 0
-
-        queue = deque([(start, 0)])
-        visited = {start}
+    def _pacman_move_time(self, map_state, start) -> dict[tuple, int]:
+        """Số lượt Pacman cần để tới mỗi ô trên map từ vị trí hiện tại"""
+        time = {start: 0}
+        # Sử dụng BFS để vẽ bản đồ thời gian di chuyển của Pacman
+        queue = deque([start])
         while queue:
-            current_pos, distance = queue.popleft()
-            for next_pos, _ in self._get_neighbors(current_pos, map_state):
-                if next_pos in visited:
-                    continue
-                if next_pos == end:
-                    return distance + 1
-                visited.add(next_pos)
-                queue.append((next_pos, distance + 1))
+            cur = queue.popleft()
+            for move in [Move.UP, Move.DOWN, Move.LEFT, Move.RIGHT]:
+                pos = cur
+                # Pacman có thể đi tối đa 2 ô trên đường thẳng trong 1 lượt
+                for _ in range(2):
+                    nxt = (pos[0] + move.value[0], pos[1] + move.value[1])
+                    if not self._is_valid_position(nxt, map_state):
+                        break
+                    pos = nxt
+                    if pos not in time:
+                        time[pos] = time[cur] + 1
+                        queue.append(pos)
+        return time
 
-        # Không tìm thấy đường đi
-        return float('inf')
-
-
-    def _dfs(self, map_state: np.ndarray, start, depth: int, visited=None) -> bool:
-        """
-        Sử dụng DFS để kiểm tra xem từ start có lối thoát trong depth bước tiếp theo không.
-        Trả về True nếu có lối thoát, False nếu dẫn tới dead end.
-        visited: các ô đã đi qua trên đường hiện tại, tránh đi qua đi lại giữa 2 ô
-        """
-        if visited is None:
-            visited = {start}
-        if depth == 0:
-            return True
-        for next_pos, _ in self._get_neighbors(start, map_state):
-            # Bỏ qua ô đã đi qua trên đường hiện tại
-            if next_pos in visited:
-                continue
-            if self._dfs(map_state, next_pos, depth - 1, visited | {next_pos}):
-                return True
-        return False
-
-
-    def _move_decision_bfs(self, map_state: np.ndarray,
-                            my_position: tuple,
-                            enemy_position: tuple) -> Move:
-        # Tính khoảng cách với Pacman hiện tại
-        current_dist = self._distance_bfs(map_state, my_position, enemy_position)  # Lưu khoảng cách hiện tại từ my_position đến enemy_position
-        if current_dist == float('inf'):
-            self.previous_move = Move.STAY
-            return Move.STAY
-        
-        # Danh sách các hướng đi hợp lệ
-        possible_move = []
-        # Tính BFS distance đến Pacman nếu đi theo hướng hợp lệ
-        for pos, move in self._get_neighbors(my_position, map_state):
-            predict_dist = self._distance_bfs(map_state, pos, enemy_position)
-            # Lọc các hướng đi tắng distance với Pacman hiện tại hoặc đảo hướng
-            if predict_dist > current_dist:
-                possible_move.append(move)
-            
-        # Chọn hướng đi tốt: ưu tiên rẽ nhánh -> di chuyển -> stay
-        if not possible_move:
-            self.previous_move = Move.STAY
-            return Move.STAY
-        # ưu tiên rẽ nhánh
-        for move in possible_move:
-            if move != self.previous_move and not self._is_backward_move(move):
-                # Thử di chuyển sang vị trí move
-                # Kiểm tra xem hướng đi này có dẫn tới dead end trong 6 bước tiếp theo không
-                # Sử dụng DFS để kiểm tra trong 6 bước tiếp theo có lối thoát không
-                # visited gồm cả my_position để DFS không quay lại ô hiện tại rồi coi đó là lối thoát
-                next_pos = self._apply_move(my_position, move)
-                if self._dfs(map_state, next_pos, 6, {my_position, next_pos}):
-                    self.previous_move = move
-                    return move
-
-        # Không có rẽ nhánh thì đi thẳng hoặc lùi
-        self.previous_move = possible_move[0]
-        return possible_move[0]
-
-    def _is_backward_move(self, move: Move) -> bool:
-        """Kiểm tra hướng đi có phải là đi ngược về"""
-        if move == Move.UP:
-            return self.previous_move == Move.DOWN
-        if move == Move.DOWN:
-            return self.previous_move == Move.UP
+    def _is_dead_end(self, pos: tuple, move: Move, map_state: np.ndarray) -> bool:
+        """Check if a position is a dead end (only one valid move)."""
+        path = []
+        # Kiểm tra hướng đang muốn đi
         if move == Move.LEFT:
-            return self.previous_move == Move.RIGHT
-        if move == Move.RIGHT:
-            return self.previous_move == Move.LEFT
-        return False
+            path = [(pos[0], c) for c in range(pos[1], 0, -1)]
+        elif move == Move.RIGHT:
+            path = [(pos[0], c) for c in range(pos[1], len(map_state[0]) - 1)]
+        elif move == Move.UP:
+            path = [(r, pos[1]) for r in range(pos[0], 0, -1)]
+        elif move == Move.DOWN:
+            path = [(r, pos[1]) for r in range(pos[0], len(map_state) - 1)]
+
+        # Duyệt theo từng ô trong hướng đi, nếu không có ô nào có ô kề hợp lệ thì đây là dead end
+        # Sô ô kề phải lớn hon 2 vì trong đó có 1 ô là vị trí cũ, 1 ô là đi tiếp
+        for position in path:
+            # Chỉ cần 1 ô có thể rẽ
+            if len(self._get_neighbors(position, map_state)) > 2:
+                return False
+        return True
